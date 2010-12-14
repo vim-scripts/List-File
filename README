@@ -1,0 +1,17 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=3368
+
+Plugin provides simple and efficient tools for managing a plain-text file of nested lists.
+
+Screenshot: http://lucasoman.com/images/listfile.png
+Detailed documentation: http://lucasoman.blogspot.com/2010/12/list-file-plugin-for-vim.html
+
+Feature highlights:
+
+- Unlimited nesting
+- Prioritizing
+- Sorting
+- Searching
+- Tagging
+- Timestamping
+
+Feel free to email the developer with questions, comments, suggestions and praise: me at lucasoman dot com
