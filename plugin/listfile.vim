@@ -33,11 +33,11 @@
 
 " should items have timestamps by default?
 if (!exists("g:listFile_timestamp"))
-	let listFile_timestamp = 0
+	let g:listFile_timestamp = 0
 endif
 " how far should each level indent?
 if (!exists("g:listFile_indent"))
-	let listFile_indent = 4
+	let g:listFile_indent = 4
 endif
 " sort order for item marks
 if (!exists("g:listFile_ranks"))
@@ -313,7 +313,8 @@ endfunction
 fun! ListGetItemRank(line)
 	let matches = matchlist(a:line,'^\s*\(\S\+\)')
 	let mark = l:matches[1]
-	return get(s:ranks,l:mark,1000)
+	let default = 1000 + char2nr(l:mark)
+	return get(s:ranks,l:mark,l:default)
 endfunction
 
 " get the depth of the given line
