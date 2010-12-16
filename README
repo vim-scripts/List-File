@@ -5,11 +5,15 @@ Plugin provides simple and efficient tools for managing a plain-text file of nes
 Screenshot: http://lucasoman.com/images/listfile.png
 Detailed documentation: http://lucasoman.blogspot.com/2010/12/list-file-plugin-for-vim.html
 
+NOTE: I greatly appreciate any feedback. Feature suggestions, bug reports and other comments are encouraged. I'm eager to improve this plugin!
+
 Feature highlights:
 
-- Unlimited nesting
 - Prioritizing
 - Sorting
 - Searching
 - Tagging
+- Unlimited nesting
 - Timestamping
+- Flexibility without complexity
+- Efficient and convenient mappings
