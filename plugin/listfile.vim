@@ -1,3 +1,4 @@
+" vim: fdm=marker
 " Creates and maintains text files of nested lists.
 " File must end in '.list'.
 " Includes nested folding for lists. Use standard vim fold shortcuts (e.g.: zo, zc).
@@ -5,6 +6,8 @@
 " Commands and shortcuts:
 "
 " CREATING
+" To get started:
+" :Lcreate <name> - create new list file with <name> (".list" is added automagically added)
 " ,n - create new item
 " <enter> - (insert or normal) create new item
 " ,s - create sub item
@@ -48,7 +51,6 @@
 " ,r - (normal) sort entire file
 "
 " ET CETERA
-" :Lcreate <name> - create new list file in current buffer with <name> (".list" is added automagically)
 " ,t - add/update last-modified timestamp on item
 
 """
@@ -71,6 +73,10 @@ endif
 if (!exists("g:listFile_mark"))
 	let g:listFile_mark = '-'
 endif
+" default due date format
+if (!exists("g:listFile_dateFormat"))
+	let g:listFile_dateFormat = '%y-%m-%d'
+endif
 
 """
 """ END CONFIGURABLE OPTIONS
@@ -80,6 +86,7 @@ com! -nargs=1 Lcreate :call ListCreate("<args>")
 
 let s:ranks = {}
 autocmd BufNewFile,BufRead *.list call ListFile()
+autocmd BufReadPost quickfix call ListFixLocationWin()
 
 " 'install' list features
 fun! ListFile() "{{{
@@ -87,7 +94,7 @@ fun! ListFile() "{{{
 
 	" we want our own folding stuff
 	setl foldmethod=expr
-	setl foldexpr=ListFoldLevel(v:lnum)
+	setl foldmethod=indent
 	setl foldtext=ListFoldLine()
 	
 	" set the configured tabbing options
@@ -158,6 +165,7 @@ fun! ListNewItem(indent) "{{{
 	" save current line for later
 	let startline = getline('.')
 	let startlinenum = line('.')
+	let lastlinenum = l:startlinenum
 
 	" decide which mark to use
 	if (a:indent != 0)
@@ -170,13 +178,14 @@ fun! ListNewItem(indent) "{{{
 	end
 
 	" should we advance to end of fold before creating item?
-	if (foldlevel(l:startlinenum) > foldlevel(l:startlinenum - 1) || ListGetDepth(l:startline) < ListGetDepth(getline(l:startlinenum - 1))) && a:indent == 0
+	if (foldlevel(l:startlinenum+1) > foldlevel(l:startlinenum) || ListGetDepth(getline(l:startlinenum+1)) < ListGetDepth(l:startline)) && a:indent == 0
 		normal j
-		while ListGetDepth(getline('.')) > ListGetDepth(l:startline) && line('.') < line('$')
+		while ListGetDepth(getline('.')) > ListGetDepth(l:startline) && line('.') != l:lastlinenum
+			let lastlinenum = line('.')
 			normal j
 		endwhile
 		" we've gone too far UNLESS we've hit the end of the file or we've hit the end, but only by coincidence
-		if line('.') != line('$') || (line('.') == line('$') && ListGetDepth(getline('.')) == ListGetDepth(l:startline) && line('.') != l:startlinenum)
+		if line('.') != l:lastlinenum || (line('.') == l:lastlinenum && ListGetDepth(getline('.')) == ListGetDepth(l:startline) && line('.') != l:startlinenum)
 			normal k
 		endif
 	endif
@@ -215,9 +224,13 @@ fun! ListSearch(args) "{{{
 endfunction "}}}
 " create a new list file
 fun! ListCreate(name) "{{{
-	exe 'e '.a:name.'.list'
-	let @z = g:listFile_mark.' '
-	normal "zP
+	try
+		exe 'e '.a:name.'.list'
+		let @z = g:listFile_mark.' '
+		normal "zP
+	catch /^Vim\%((\a\+)\)\=:E37/
+		exe 'w '.a:name.'.list'
+	endtry
 endfunction "}}}
 " add/update timestamp only if option enabled
 fun! ListTimestampOptional() "{{{
@@ -239,6 +252,15 @@ endfunction "}}}
 fun! ListTimestampString() "{{{
 	return '['.strftime('%y-%m-%d %H:%M').']'
 endfunction "}}}
+" set the format of the location window contents
+fun! ListFixLocationWin() "{{{
+	let firstLine = getline(1)
+	if (match(l:firstLine,'\.list|') >= 0)
+		set modifiable
+		silent exe 'g/^[^|]\+|[^|]\+|\s*/s///g'
+		setlocal nomodifiable
+	endif
+endfunction "}}}
 
 
 """
@@ -253,38 +275,13 @@ fun! ListFoldLine() "{{{
 		let s:spaces = s:spaces.' '
 		let s:count = s:count + 1
 	endwhile
-	let numLines = v:foldend - v:foldstart
-	let foldLine = substitute(getline(v:foldstart)." (".l:numLines.")","\t",s:spaces,'g')
+	let numLines = v:foldend - v:foldstart + 1
+	let tabs = matchstr(getline(v:foldstart),"^\t*")
+	let foldLine = repeat(s:spaces,strlen(l:tabs))."[".l:numLines." sub-items]"
 	if (winwidth(0) > strlen(foldLine))
 		let foldLine = l:foldLine.repeat(' ',winwidth(0) - strlen(foldLine))
 	endif
 	return l:foldLine
-endfunction "}}}
-" foldexpr function
-fun! ListFoldLevel(linenum) "{{{
-	let s:prefix = ''
-	let s:myline = getline(a:linenum)
-	let s:nextline = getline(a:linenum+1)
-	let s:mynumtabs = ListGetDepth(s:myline)
-	let s:nextnumtabs = ListGetDepth(s:nextline)
-	if s:nextnumtabs > s:mynumtabs " if this item has sub-items
-		let s:level = s:nextnumtabs
-	else " next item is either same or higher level
-		let s:level = s:mynumtabs
-		if s:nextnumtabs < s:mynumtabs " if next item has higher level, close this fold
-			let s:prefix = '<'
-			let s:level = s:nextnumtabs+1
-		end
-	endif
-	if a:linenum > 1
-		s:pline = getline(a:linenum-1)
-		s:pnumtabs = ListGetDepth(s:pline)
-		if s:level < s:pnumtabs
-		" if this is higher level than prev, start a new fold
-			let s:prefix = '>'
-		endif
-	endif
-	return s:prefix.s:level
 endfunction "}}}
 
 
@@ -469,15 +466,16 @@ endfunction "}}}
 " compile tag index
 fun! ListTagCompileIndex() "{{{
 	for line in getbufline('%',0,'$')
-		let matches = matchlist(line,':\([^\s:]\+\):')
-		if len(l:matches) > 0
-			call remove(l:matches,0)
-			for tagString in l:matches
-				if tagString != ''
-					let b:tags[tagString] = 'x'
-				endif
-			endfor
-		endif
+		let i = 1
+		while 1
+			let match = matchstr(line,':[^\t :]\+:',0,l:i)
+			if l:match == ''
+				break
+			endif
+			let match = substitute(l:match,':','','g')
+			let b:tags[l:match] = 'x'
+			let i = l:i + 1
+		endwhile
 	endfor
 endfunction "}}}
 " autocomplete function for tags
@@ -500,7 +498,7 @@ endfunction "}}}
 fun! ListDueSearch(date) "{{{
 	let dates = ListDateTranslate(a:date)
 	let datestring = join(l:dates,'\|')
-	exe 'lvimgrep /{\('.l:datestring.'\)}/ %'
+		exe 'lvimgrep /^\s*[^x	 ]\+.*{\('.l:datestring.'\)}/ %'
 	lopen
 endfunction "}}}
 " set the due date for a range of lines
@@ -540,7 +538,7 @@ fun! ListDueR(linenum) "{{{
 endfunction "}}}
 " translate a string into the appropriate array of date strings
 fun! ListDateTranslate(date) "{{{
-	let dateFormat = '%y-%m-%d'
+	let dateFormat = g:listFile_dateFormat
 	let dates = []
 	if (a:date == '' || a:date == "today")
 		let dates = add(l:dates,strftime(l:dateFormat))
